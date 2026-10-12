@@ -833,7 +833,7 @@ Contributions are welcome.
 3. Run `cargo fmt`, `cargo clippy -- -D warnings`, and `pnpm lint` before opening a PR.
 4. Describe the problem, the approach, and any security implications in the PR.
 
-Security issues: please **do not** open public issues. Email `security@<your-domain>` instead.
+Security issues: please **do not** open public issues. Email `devogazi@gmail.com` instead.
 
 ## License
 
