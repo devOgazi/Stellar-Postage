@@ -1,0 +1,23 @@
+{
+  "name": "@stellar-postage/mailer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@stellar-postage/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.11",
+    "jest": "29.7.0",
+    "ts-jest": "29.2.3",
+    "tsx": "4.16.2",
+    "typescript": "5.5.4"
+  }
+}

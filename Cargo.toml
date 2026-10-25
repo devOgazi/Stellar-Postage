@@ -1,0 +1,14 @@
+[workspace]
+members = ["contracts/escrow"]
+resolver = "2"
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+overflow-checks = true
+debug = 0
+strip = "symbols"
+
+[profile.release-with-logs]
+inherits = "release"
+debug-assertions = true
