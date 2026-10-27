@@ -58,3 +58,9 @@ CREATE TABLE chain_events (
   payload    JSONB,
   PRIMARY KEY (ledger, tx_hash, event_idx)
 );
+
+-- Indexes for common query paths
+CREATE INDEX IF NOT EXISTS idx_messages_recipient_id_status ON messages(recipient_id, status);
+CREATE INDEX IF NOT EXISTS idx_chain_events_stake_id ON chain_events(stake_id);
+CREATE INDEX IF NOT EXISTS idx_channels_kind_external_id ON channels(kind, external_id);
+CREATE INDEX IF NOT EXISTS idx_messages_sender_addr ON messages(sender_addr);
