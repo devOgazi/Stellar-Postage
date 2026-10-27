@@ -5,7 +5,9 @@ target/
 *.wasm
 .env
 .env.local
+.env.deployed
 *.log
+proptest-regressions/
 .DS_Store
 coverage/
 pnpm-debug.log*

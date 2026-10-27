@@ -21,6 +21,8 @@ mod storage;
 mod types;
 
 #[cfg(test)]
+mod invariants;
+#[cfg(test)]
 mod test;
 
 use soroban_sdk::{
