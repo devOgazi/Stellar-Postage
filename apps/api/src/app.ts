@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import { EscrowClient } from '@stellar-postage/sdk';
 import { type AppConfig, loadConfig } from './config.js';
 import { DataAccessLayer } from './db/dal.js';
 import { getPool } from './db/pool.js';
@@ -6,6 +7,9 @@ import { NonceStore } from './auth/nonce.js';
 import { AuthService } from './auth/service.js';
 import { verifyJwt, type SessionTokenPayload } from './auth/jwt.js';
 import { authRoutes } from './routes/auth.js';
+import { recipientRoutes } from './routes/recipients.js';
+import { meRoutes } from './routes/me.js';
+import { messagesRoutes } from './routes/messages.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -21,6 +25,7 @@ declare module 'fastify' {
     dal: DataAccessLayer;
     authService: AuthService;
     nonceStore: NonceStore;
+    escrowClient: EscrowClient;
   }
 }
 
@@ -29,6 +34,7 @@ export interface AppOptions {
   dal?: DataAccessLayer;
   nonceStore?: NonceStore;
   authService?: AuthService;
+  escrowClient?: EscrowClient;
 }
 
 export function createApp(options?: AppOptions): FastifyInstance {
@@ -46,15 +52,28 @@ export function createApp(options?: AppOptions): FastifyInstance {
       nonceStore,
       dal
     );
+  const escrowClient =
+    options?.escrowClient ||
+    new EscrowClient({
+      contractId: config.escrowContractId,
+      rpcUrl: config.sorobanRpcUrl,
+      networkPassphrase: config.networkPassphrase,
+    });
 
   const app = Fastify({
     logger: false,
+    ajv: {
+      customOptions: {
+        allowUnionTypes: true,
+      },
+    },
   });
 
   app.decorate('config', config);
   app.decorate('dal', dal);
   app.decorate('nonceStore', nonceStore);
   app.decorate('authService', authService);
+  app.decorate('escrowClient', escrowClient);
 
   // Authentication preHandler hook
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -89,6 +108,19 @@ export function createApp(options?: AppOptions): FastifyInstance {
   void app.register(
     async (v1) => {
       await v1.register(authRoutes, { authService });
+      await v1.register(recipientRoutes, { dal });
+      await v1.register(meRoutes, {
+        dal,
+        escrowClient,
+        encryptionKey: config.messageEncryptionKey,
+      });
+      await v1.register(messagesRoutes, {
+        dal,
+        escrowClient,
+        encryptionKey: config.messageEncryptionKey,
+        usdcSacId: config.usdcSacId,
+        replyVetoWindowSecs: config.replyVetoWindowSecs,
+      });
     },
     { prefix: '/v1' }
   );

@@ -1,0 +1,517 @@
+openapi: 3.0.3
+info:
+  title: Stellar Postage REST API
+  description: >
+    Pay-to-reach messaging on Stellar/Soroban.
+    Stake USDC to get a busy person's attention. Get it back if they reply.
+  version: 0.1.0
+servers:
+  - url: http://localhost:4000/v1
+    description: Local development server
+paths:
+  /auth/challenge:
+    post:
+      summary: Get a challenge transaction to sign
+      description: Generates a SEP-10 style challenge transaction signed by the server key with a short expiry and unique nonce.
+      operationId: getAuthChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - address
+              properties:
+                address:
+                  type: string
+                  description: Client's Stellar G-address (ed25519 public key)
+                  example: GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF
+      responses:
+        '200':
+          description: Challenge transaction ready to be signed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction:
+                    type: string
+                    description: Base64-encoded challenge transaction XDR
+                  network_passphrase:
+                    type: string
+                    description: Stellar network passphrase
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /auth/verify:
+    post:
+      summary: Submit signed challenge, receive a session
+      description: Verifies client signature, freshness, and replay-protection nonce; upserts user by stellar_address; returns session JWT.
+      operationId: verifyAuthChallenge
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - challenge
+              properties:
+                challenge:
+                  type: string
+                  description: Base64-encoded transaction XDR signed by the client
+      responses:
+        '200':
+          description: Authentication successful, session JWT granted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Bearer JWT session token
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /recipients/{handle}:
+    get:
+      summary: Public profile
+      description: Fetches price, reply windows, and verified channels for a recipient by handle or Stellar address.
+      operationId: getRecipientProfile
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User handle or Stellar address
+      responses:
+        '200':
+          description: Recipient profile details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  recipient:
+                    $ref: '#/components/schemas/User'
+                  pricing:
+                    $ref: '#/components/schemas/Pricing'
+                  channels:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Channel'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /me/pricing:
+    put:
+      summary: Update price and windows
+      description: Updates recipient minimum stake and reply windows in DB and builds an unsigned set_price transaction for on-chain submission.
+      operationId: updatePricing
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - min_amount
+                - min_window_secs
+                - max_window_secs
+              properties:
+                min_amount:
+                  type: string
+                  description: Minimum stake required in base units (7 decimals)
+                  example: "50000000"
+                min_window_secs:
+                  type: integer
+                  description: Minimum allowed reply window in seconds
+                  example: 3600
+                max_window_secs:
+                  type: integer
+                  description: Maximum allowed reply window in seconds
+                  example: 604800
+                allowlist:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional list of exempted sender addresses
+      responses:
+        '200':
+          description: Pricing updated and unsigned set_price transaction returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pricing:
+                    $ref: '#/components/schemas/Pricing'
+                  transaction:
+                    type: string
+                    nullable: true
+                    description: Unsigned assembled set_price transaction XDR
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /me/inbox:
+    get:
+      summary: Recipient inbox
+      description: Returns all messages addressed to the authenticated user.
+      operationId: getInbox
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of incoming messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /me/sent:
+    get:
+      summary: Sender history
+      description: Returns all messages sent by the authenticated user.
+      operationId: getSentMessages
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of sent messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /messages:
+    post:
+      summary: Create a message draft
+      description: >
+        Stores encrypted message body in Postgres, computes msg_hash = sha256(payload),
+        and returns an unsigned Soroban send transaction.
+        Note: Messages are never written on-chain except as msg_hash.
+      operationId: createMessage
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - recipient
+                - body
+              properties:
+                recipient:
+                  type: string
+                  description: Recipient handle or Stellar public key
+                body:
+                  type: string
+                  description: Plaintext message payload to be encrypted
+                amount:
+                  type: string
+                  description: Stake amount in base units (defaults to recipient minimum)
+                window_secs:
+                  type: integer
+                  description: Reply window duration in seconds
+      responses:
+        '201':
+          description: Message draft created and unsigned send transaction returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message_id:
+                    type: string
+                    format: uuid
+                  msg_hash:
+                    type: string
+                    description: Hex-encoded sha256 of plaintext message body
+                  status:
+                    type: string
+                    example: pending
+                  transaction:
+                    type: string
+                    nullable: true
+                    description: Unsigned assembled send transaction XDR
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /messages/{id}/submit:
+    post:
+      summary: Submit the signed transaction
+      description: Submits the signed transaction to Soroban RPC. Marks the message delivered upon confirmation and attaches stake_id.
+      operationId: submitMessageTransaction
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signed_tx:
+                  type: string
+                  description: Signed send transaction XDR
+                stake_id:
+                  type: string
+                  description: Optional on-chain stake ID if known
+      responses:
+        '200':
+          description: Message marked delivered with on-chain stake ID attached
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /messages/{id}:
+    get:
+      summary: Message and stake status
+      description: Returns message details and decrypted body. Only accessible to the sender or recipient.
+      operationId: getMessageById
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message details and decrypted body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /messages/{id}/spam:
+    post:
+      summary: Recipient flags spam
+      description: Recipient flags message as spam. Marks status spam and builds flag_spam transaction to claim stake immediately.
+      operationId: flagMessageSpam
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Message marked as spam with unsigned flag_spam transaction returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    $ref: '#/components/schemas/Message'
+                  transaction:
+                    type: string
+                    nullable: true
+                    description: Unsigned assembled flag_spam transaction XDR
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /messages/{id}/not-a-reply:
+    post:
+      summary: Recipient vetoes a reply
+      description: Recipient vetoes an automatic reply attestation inside REPLY_VETO_WINDOW_SECS.
+      operationId: vetoReply
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Veto recorded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: vetoed
+                  message_id:
+                    type: string
+                    format: uuid
+        '400':
+          description: Veto window has expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        stellar_address:
+          type: string
+        handle:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    Pricing:
+      type: object
+      properties:
+        min_amount:
+          type: string
+        min_window_secs:
+          type: integer
+        max_window_secs:
+          type: integer
+        allowlist:
+          type: array
+          items:
+            type: string
+
+    Channel:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [telegram, email]
+        verified:
+          type: boolean
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        stake_id:
+          type: string
+          nullable: true
+        sender_addr:
+          type: string
+        recipient_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, delivered, replied, spam, expired]
+        body:
+          type: string
+          description: Decrypted plaintext message body
+        msg_hash:
+          type: string
+          description: Hex sha256 hash of message payload
+        created_at:
+          type: string
+          format: date-time
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters or body validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Authentication required or invalid session token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Insufficient permissions to access this resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

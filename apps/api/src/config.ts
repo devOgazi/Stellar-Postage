@@ -58,8 +58,12 @@ export function loadConfig(overrides?: Partial<AppConfig>): AppConfig {
     networkPassphrase,
     sorobanRpcUrl: process.env['SOROBAN_RPC_URL'] || 'https://soroban-testnet.stellar.org',
     horizonUrl: process.env['HORIZON_URL'] || 'https://horizon-testnet.stellar.org',
-    escrowContractId: process.env['ESCROW_CONTRACT_ID'] || '',
-    usdcSacId: process.env['USDC_SAC_ID'] || '',
+    escrowContractId:
+      process.env['ESCROW_CONTRACT_ID'] ||
+      'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
+    usdcSacId:
+      process.env['USDC_SAC_ID'] ||
+      'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
     sponsorKeypair,
     databaseUrl: process.env['DATABASE_URL'] || 'postgres://postgres:postgres@localhost:5432/postage',
     sessionSecret: process.env['SESSION_SECRET'] || 'development-session-secret-at-least-32-chars-long',

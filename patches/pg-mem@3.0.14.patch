@@ -1,0 +1,20 @@
+diff --git a/index.js b/index.js
+index 15cbc923ac5e880e58cbbd6d274bdbfa24b93dca..c192c168bbf23cf28dd8e022e6c3c7215d927ca0 100644
+--- a/index.js
++++ b/index.js
+@@ -4414,13 +4414,13 @@ exports.bufFromString = bufFromString;
+ exports.isBuf = isBuf;
+ exports.bufClone = bufClone;
+ function bufToString(buf) {
+-    return buf === null || buf === void 0 ? void 0 : buf.toString('utf-8');
++    return buf === null || buf === void 0 ? void 0 : buf.toString('latin1');
+ }
+ function bufCompare(a, b) {
+     return Buffer.compare(a, b);
+ }
+ function bufFromString(str) {
+-    return Buffer.from(str);
++    return Buffer.from(str, 'latin1');
+ }
+ function isBuf(v) {
+     return Buffer.isBuffer(v);
