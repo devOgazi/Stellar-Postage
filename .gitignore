@@ -9,5 +9,6 @@ target/
 *.log
 proptest-regressions/
 .DS_Store
+*.tsbuildinfo
 coverage/
 pnpm-debug.log*
