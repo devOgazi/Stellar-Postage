@@ -284,6 +284,13 @@ export class DataAccessLayer {
     return res.rows;
   }
 
+  async findPendingStakeMessages(): Promise<MessageRow[]> {
+    const res = await this.db.query<MessageRow>(
+      "SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE status IN ('pending', 'delivered') AND stake_id IS NOT NULL"
+    );
+    return res.rows;
+  }
+
   // =========================================================================
   // Reply Evidence Repository
   // =========================================================================
