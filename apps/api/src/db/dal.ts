@@ -131,6 +131,21 @@ export class DataAccessLayer {
     return channel;
   }
 
+  async linkTelegramChannel(userId: string, externalId: string): Promise<ChannelRow> {
+    const res = await this.db.query<ChannelRow>(
+      `INSERT INTO channels (user_id, kind, external_id, verified_at)
+       VALUES ($1, 'telegram', $2, now())
+       ON CONFLICT (kind, external_id) DO UPDATE
+       SET user_id = EXCLUDED.user_id,
+           verified_at = now()
+       RETURNING id, user_id, kind, external_id, verified_at`,
+      [userId, externalId]
+    );
+    const channel = res.rows[0];
+    if (!channel) throw new Error('Failed to link telegram channel');
+    return channel;
+  }
+
   // =========================================================================
   // Pricing Repository
   // =========================================================================
@@ -233,6 +248,24 @@ export class DataAccessLayer {
     const msg = res.rows[0];
     if (!msg) throw new Error(`Message not found: ${id}`);
     return msg;
+  }
+
+  async updateMessageExternalRef(id: string, externalRef: string): Promise<MessageRow> {
+    const res = await this.db.query<MessageRow>(
+      'UPDATE messages SET external_ref = $1 WHERE id = $2 RETURNING id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at',
+      [externalRef, id]
+    );
+    const msg = res.rows[0];
+    if (!msg) throw new Error(`Message not found: ${id}`);
+    return msg;
+  }
+
+  async findMessageByExternalRef(externalRef: string): Promise<MessageRow | null> {
+    const res = await this.db.query<MessageRow>(
+      'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE external_ref = $1',
+      [externalRef]
+    );
+    return res.rows[0] ?? null;
   }
 
   async findInbox(recipientId: string): Promise<MessageRow[]> {

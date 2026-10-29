@@ -1,5 +1,6 @@
 import type { FastifyPluginCallback } from 'fastify';
 import type { EscrowClient } from '@stellar-postage/sdk';
+import { generateLinkToken } from '@stellar-postage/bot';
 import type { DataAccessLayer } from '../db/dal.js';
 import { decryptMessage } from '../crypto/encryption.js';
 
@@ -7,10 +8,12 @@ export interface MeRoutesOptions {
   dal: DataAccessLayer;
   escrowClient: EscrowClient;
   encryptionKey: Buffer;
+  sessionSecret?: string;
+  botUsername?: string;
 }
 
 export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, options, done) => {
-  const { dal, escrowClient, encryptionKey } = options;
+  const { dal, escrowClient, encryptionKey, sessionSecret, botUsername } = options;
 
   // PUT /me/pricing
   fastify.put(
@@ -88,6 +91,25 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
           allowlist: updated.allowlist,
         },
         transaction: transactionXdr,
+      });
+    }
+  );
+
+  // POST /me/channels/telegram/link
+  fastify.post(
+    '/me/channels/telegram/link',
+    {
+      preHandler: [fastify.authenticate],
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      const secret = sessionSecret || (fastify.config?.sessionSecret ?? 'default-secret');
+      const token = generateLinkToken(user.id, secret);
+      const username = botUsername || process.env['TELEGRAM_BOT_USERNAME'] || 'StellarPostageBot';
+
+      return reply.code(200).send({
+        link_token: token,
+        url: `https://t.me/${username}?start=${token}`,
       });
     }
   );

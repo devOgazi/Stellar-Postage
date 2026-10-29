@@ -34,6 +34,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@stellar-postage/bot':
+        specifier: workspace:*
+        version: link:../../services/bot
       '@stellar-postage/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
@@ -154,6 +157,9 @@ importers:
 
   services/bot:
     dependencies:
+      '@stellar-postage/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
       '@stellar-postage/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -161,6 +167,9 @@ importers:
         specifier: 4.16.3
         version: 4.16.3
     devDependencies:
+      '@types/jest':
+        specifier: 29.5.12
+        version: 29.5.12
       '@types/node':
         specifier: 20.14.11
         version: 20.14.11

@@ -16,6 +16,8 @@ export interface AppConfig {
   authExpirySecs: number;
   replyVetoWindowSecs: number;
   messageEncryptionKey: Buffer;
+  telegramBotToken: string;
+  telegramWebhookSecret: string;
 }
 
 export function loadConfig(overrides?: Partial<AppConfig>): AppConfig {
@@ -71,6 +73,8 @@ export function loadConfig(overrides?: Partial<AppConfig>): AppConfig {
     authExpirySecs: parseInt(process.env['AUTH_EXPIRY_SECS'] || '300', 10),
     replyVetoWindowSecs: parseInt(process.env['REPLY_VETO_WINDOW_SECS'] || '600', 10),
     messageEncryptionKey: messageKey,
+    telegramBotToken: process.env['TELEGRAM_BOT_TOKEN'] || '',
+    telegramWebhookSecret: process.env['TELEGRAM_WEBHOOK_SECRET'] || '',
   };
 
   return { ...baseConfig, ...overrides };

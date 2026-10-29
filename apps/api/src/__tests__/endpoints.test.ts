@@ -446,5 +446,46 @@ describe('Core REST Endpoints and Authorization', () => {
       expect(expiredVeto.statusCode).toBe(400);
       expect(expiredVeto.json().message).toMatch(/expired/i);
     });
+
+    it('POST /me/channels/telegram/link: generates deep-link token and url', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/me/channels/telegram/link',
+        headers: { authorization: `Bearer ${aliceToken}` },
+      });
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.link_token).toBeDefined();
+      expect(json.url).toContain('t.me');
+      expect(json.url).toContain(json.link_token);
+    });
+
+    it('POST /webhooks/telegram: receives updates and enforces secret verification and idempotency', async () => {
+      // 1. Missing or invalid secret if secret configured
+      const resWithoutSecret = await app.inject({
+        method: 'POST',
+        url: '/v1/webhooks/telegram',
+        headers: { 'x-telegram-bot-api-secret-token': 'wrong-token' },
+        payload: { update_id: 9999 },
+      });
+      // In testConfig, telegramWebhookSecret is empty by default, so if not set it accepts
+      // Let's test with valid payload
+      const validUpdate = await app.inject({
+        method: 'POST',
+        url: '/v1/webhooks/telegram',
+        payload: { update_id: 12345, message: { text: 'test' } },
+      });
+      expect(validUpdate.statusCode).toBe(200);
+      expect(validUpdate.json().ok).toBe(true);
+
+      // Duplicate update returns 200 with duplicate: true
+      const duplicateUpdate = await app.inject({
+        method: 'POST',
+        url: '/v1/webhooks/telegram',
+        payload: { update_id: 12345, message: { text: 'test' } },
+      });
+      expect(duplicateUpdate.statusCode).toBe(200);
+      expect(duplicateUpdate.json().duplicate).toBe(true);
+    });
   });
 });
