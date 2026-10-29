@@ -6,6 +6,7 @@ export * from './types.js';
 export * from './linking.js';
 export * from './idempotency.js';
 export * from './delivery.js';
+export * from './replyDetector.js';
 export * from './bot.js';
 export * from './webhook.js';
 export { Telegraf } from 'telegraf';

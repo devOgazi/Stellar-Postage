@@ -1,19 +1,21 @@
-import { Telegraf } from 'telegraf';
+import { Markup, Telegraf } from 'telegraf';
 import type { BotDataAccess } from './types.js';
 import { verifyLinkToken } from './linking.js';
+import { ReplyDetector } from './replyDetector.js';
 
 export interface CreatePostageBotOptions {
   botToken: string;
   linkSecret: string;
   dal: BotDataAccess;
   botUsername?: string;
+  replyDetector?: ReplyDetector;
 }
 
 /**
  * Creates and configures the Telegraf bot instance for Stellar Postage.
  */
 export function createPostageBot(options: CreatePostageBotOptions): Telegraf {
-  const { botToken, linkSecret, dal } = options;
+  const { botToken, linkSecret, dal, replyDetector } = options;
   const bot = new Telegraf(botToken);
 
   // Set default botInfo to avoid cold-start getMe network calls
@@ -57,6 +59,41 @@ export function createPostageBot(options: CreatePostageBotOptions): Telegraf {
       await ctx.reply(`❌ Failed to link channel: ${msg}`);
     }
   });
+
+  // Reply detection on message updates
+  if (replyDetector) {
+    bot.on('message', async (ctx, next) => {
+      const msg = ctx.message as any;
+      if (msg?.reply_to_message?.message_id) {
+        const result = await replyDetector.processUpdate(ctx.update);
+        if (result.accepted && result.evidence) {
+          const keyboard = Markup.inlineKeyboard([
+            [Markup.button.callback('❌ Not a real reply', `veto:${result.evidence.id}`)],
+          ]);
+          await ctx.reply(
+            '⏳ Valid reply detected. Sender refund will be confirmed once the veto window closes.',
+            { reply_markup: keyboard.reply_markup }
+          );
+          return;
+        }
+      }
+      return next();
+    });
+
+    // Action: Veto ("Not a real reply")
+    bot.action(/^veto:(.+)$/, async (ctx) => {
+      const evidenceId = (ctx.match as RegExpMatchArray)?.[1];
+      if (!evidenceId) return;
+
+      const res = replyDetector.veto(evidenceId);
+      if (res.success) {
+        await ctx.answerCbQuery('Reply vetoed. Sender will not receive a refund.');
+        await ctx.reply('❌ Reply vetoed. The sender will not receive a refund.');
+      } else {
+        await ctx.answerCbQuery(res.error || 'Veto window has expired.');
+      }
+    });
+  }
 
   // Action: Spam
   bot.action(/^spam:(.+)$/, async (ctx) => {

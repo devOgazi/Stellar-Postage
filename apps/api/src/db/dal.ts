@@ -320,6 +320,24 @@ export class DataAccessLayer {
     return res.rows;
   }
 
+  async findReplyEvidenceById(id: string): Promise<ReplyEvidenceRow | null> {
+    const res = await this.db.query<ReplyEvidenceRow>(
+      'SELECT id, message_id, kind, payload, hash, oracle_tx, created_at FROM reply_evidence WHERE id = $1',
+      [id]
+    );
+    return res.rows[0] ?? null;
+  }
+
+  async updateReplyEvidenceOracleTx(id: string, oracleTx: string): Promise<ReplyEvidenceRow> {
+    const res = await this.db.query<ReplyEvidenceRow>(
+      'UPDATE reply_evidence SET oracle_tx = $1 WHERE id = $2 RETURNING id, message_id, kind, payload, hash, oracle_tx, created_at',
+      [oracleTx, id]
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error(`ReplyEvidence not found: ${id}`);
+    return row;
+  }
+
   // =========================================================================
   // Chain Events Repository
   // =========================================================================
