@@ -1,0 +1,22 @@
+# Global code owners
+* @devogazi
+
+# Core Smart Contracts
+/contracts/ @devogazi
+
+# Backend Applications & APIs
+/apps/ @devogazi
+
+# Microservices
+/services/ @devogazi
+
+# Shared Libraries & SDKs
+/packages/ @devogazi
+
+# Tests & CI Configuration
+/tests/ @devogazi
+/.github/ @devogazi
+
+# Architecture & Specifications
+/docs/ @devogazi
+/README.md @devogazi
