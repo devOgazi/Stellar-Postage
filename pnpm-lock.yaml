@@ -322,6 +322,61 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  tests/e2e:
+    dependencies:
+      '@stellar-postage/bot':
+        specifier: workspace:*
+        version: link:../../services/bot
+      '@stellar-postage/indexer':
+        specifier: workspace:*
+        version: link:../../services/indexer
+      '@stellar-postage/mailer':
+        specifier: workspace:*
+        version: link:../../services/mailer
+      '@stellar-postage/oracle':
+        specifier: workspace:*
+        version: link:../../services/oracle
+      '@stellar-postage/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@stellar-postage/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@stellar-postage/sweeper':
+        specifier: workspace:*
+        version: link:../../services/sweeper
+      '@stellar/stellar-sdk':
+        specifier: 12.3.0
+        version: 12.3.0
+      pg:
+        specifier: 8.12.0
+        version: 8.12.0
+    devDependencies:
+      '@types/jest':
+        specifier: 29.5.12
+        version: 29.5.12
+      '@types/node':
+        specifier: 20.14.11
+        version: 20.14.11
+      '@types/pg':
+        specifier: 8.11.6
+        version: 8.11.6
+      jest:
+        specifier: 29.7.0
+        version: 29.7.0(@types/node@20.14.11)
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(patch_hash=bd6hcywlovxwpbd3yslwqa4qlq)
+      ts-jest:
+        specifier: 29.2.3
+        version: 29.2.3(@babel/core@7.29.7)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.29.7))(jest@29.7.0(@types/node@20.14.11))(typescript@5.5.4)
+      tsx:
+        specifier: 4.16.2
+        version: 4.16.2
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
 packages:
 
   '@alloc/quick-lru@5.3.0':

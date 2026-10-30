@@ -397,7 +397,9 @@ export class DataAccessLayer {
         params.event_idx,
         params.topic,
         params.stake_id ? params.stake_id.toString() : null,
-        JSON.stringify(params.payload ?? null),
+        JSON.stringify(params.payload ?? null, (_k, v) =>
+          typeof v === 'bigint' ? v.toString() : v,
+        ),
       ],
     );
   }
