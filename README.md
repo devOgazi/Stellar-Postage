@@ -13,30 +13,31 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [The Problem](#the-problem)
-3. [How It Works](#how-it-works)
-4. [Key Features](#key-features)
-5. [Architecture](#architecture)
-6. [Smart Contract Specification](#smart-contract-specification)
-7. [Reply Detection (the Hard Part)](#reply-detection-the-hard-part)
-8. [Backend Services](#backend-services)
-9. [Database Schema](#database-schema)
-10. [REST API](#rest-api)
-11. [Frontend](#frontend)
-12. [Wallets, Trustlines and Fee Sponsorship](#wallets-trustlines-and-fee-sponsorship)
-13. [Economics and Fee Model](#economics-and-fee-model)
-14. [Security and Threat Model](#security-and-threat-model)
-15. [Privacy](#privacy)
-16. [Repository Structure](#repository-structure)
-17. [Getting Started](#getting-started)
-18. [Configuration](#configuration)
-19. [Testing](#testing)
-20. [Deployment](#deployment)
-21. [Roadmap](#roadmap)
-22. [FAQ](#faq)
-23. [Contributing](#contributing)
-24. [License](#license)
-25. [Disclaimer](#disclaimer)
+2. [Project Status](#project-status)
+3. [The Problem](#the-problem)
+4. [How It Works](#how-it-works)
+5. [Key Features](#key-features)
+6. [Architecture](#architecture)
+7. [Smart Contract Specification](#smart-contract-specification)
+8. [Reply Detection (the Hard Part)](#reply-detection-the-hard-part)
+9. [Backend Services](#backend-services)
+10. [Database Schema](#database-schema)
+11. [REST API](#rest-api)
+12. [Frontend](#frontend)
+13. [Wallets, Trustlines and Fee Sponsorship](#wallets-trustlines-and-fee-sponsorship)
+14. [Economics and Fee Model](#economics-and-fee-model)
+15. [Security and Threat Model](#security-and-threat-model)
+16. [Privacy](#privacy)
+17. [Repository Structure](#repository-structure)
+18. [Getting Started](#getting-started)
+19. [Configuration](#configuration)
+20. [Testing](#testing)
+21. [Deployment](#deployment)
+22. [Roadmap](#roadmap)
+23. [FAQ](#faq)
+24. [Contributing](#contributing)
+25. [License](#license)
+26. [Disclaimer](#disclaimer)
 
 ---
 
@@ -48,6 +49,31 @@ Stellar Postage is a spam-resistant inbox built on **Soroban**, Stellar's smart 
 - If the message is **ignored** until the deadline, or **marked as spam**, the recipient **keeps the stake**. Spammers pay.
 
 The result is a market for attention: recipients set a price, and senders signal seriousness with real money at no net cost when the message is genuine.
+
+## Project Status
+
+Stellar Postage is in active development with core smart contracts, microservices, and delivery channels implemented.
+
+### What Is Built
+
+- **Soroban Escrow Contract (`contracts/escrow`)**: Fully implemented in Rust with Soroban SDK. Supports USDC via Stellar Asset Contract (SAC), state lifecycle (`Pending`, `Refunded`, `Claimed`), admin key rotation (`set_oracle`), protocol fee configuration (`set_fee` up to 5% hard cap), recipient pricing (`set_price`), and emergency circuit breaker (`pause()` / `unpause()`). All 7 protocol invariants are strictly verified via unit, negative, and property tests.
+- **Backend API (`apps/api`)**: Fastify REST API with SEP-10 Sign-In With Stellar authentication, signed session JWTs, AES-256-GCM encryption at rest, and typed Postgres data-access layer.
+- **Telegram Channel Adapter (`services/bot`)**: Telegraf-powered bot with `/start` linking, inline actions (**Reply**, **Spam**, **Mute**), threading detection via `reply_to_message`, minimum length checks, and auto-reply filters.
+- **Email Channel Adapter (`services/mailer`)**: Pluggable provider architecture with Postmark implementation. Generates deterministic unique proxy addresses (`s_<slug>@reply.domain`), sets `Reply-To`, handles inbound-parse webhooks at `POST /v1/webhooks/inbound-email` with `INBOUND_WEBHOOK_SECRET` verification, and validates SPF/DKIM/DMARC and `In-Reply-To`/`References` threading.
+- **Oracle Attestation Service (`services/oracle`)**: Evidence verification engine with `LocalSigner` (dev) and `KmsSigner` (AWS/GCP/Vault HSM), multi-account channel pool for parallel non-colliding submissions, and bounded retry backoff.
+- **Soroban Event Indexer (`services/indexer`)**: Event poller streaming `sent`, `replied`, `spam`, `claimed`, and `price` events into PostgreSQL with durable cursor tracking and RPC retention limit safeguards.
+- **Sweeper Keeper (`services/sweeper`)**: Automated keeper discovering expired pending stakes (`now > deadline + grace_secs`), executing permissionless `claim()`, and bumping entry TTLs under PostgreSQL session advisory locks.
+- **End-to-End Integration Suite (`tests/e2e`)**: Integration test suite exercising both full-lifecycle scenarios against Stellar Quickstart and PostgreSQL containers, wired into CI via `.github/workflows/e2e.yml`.
+- **Operational Documentation & Runbooks**: In-depth architecture specification ([docs/architecture.md](./docs/architecture.md)), oracle design ([docs/oracle.md](./docs/oracle.md)), comprehensive threat model ([docs/threat-model.md](./docs/threat-model.md)), testing guide ([docs/testing.md](./docs/testing.md)), and production runbooks in [docs/runbooks/](./docs/runbooks/).
+
+### Implementation Alignment & Command Fixes
+
+During implementation, several operational commands and names were aligned with the codebase:
+
+1. **Testing**: `pnpm test:integration` runs the E2E integration test suite across services, local containers, and simulated ledgers. See [docs/testing.md](./docs/testing.md).
+2. **Email Channel Inbound Hook**: Inbound email parse route is mounted at `POST /v1/webhooks/inbound-email` and protected by `INBOUND_WEBHOOK_SECRET`.
+3. **Database Schema**: Database schema actively uses `messages.proxy_addr` for email reply proxying and supports `channels.kind` (`telegram` and `email`).
+4. **Channel Account Pooling**: The Oracle and Sweeper microservices actively use `ChannelAccountPool` to eliminate Stellar sequence number collisions (`txBAD_SEQ`).
 
 ## The Problem
 
@@ -82,11 +108,11 @@ Postage fixes the incentives instead of guessing at content. If sending is free 
 
 ### Lifecycle of a stake
 
-| State | Meaning | Next states |
-|---|---|---|
-| `Pending` | USDC is locked, message delivered or awaiting delivery | `Refunded`, `Claimed` |
-| `Refunded` | Recipient replied. Stake returned to sender (minus protocol fee, if any) | terminal |
-| `Claimed` | Deadline passed or spam flagged. Recipient received the stake | terminal |
+| State      | Meaning                                                                  | Next states           |
+| ---------- | ------------------------------------------------------------------------ | --------------------- |
+| `Pending`  | USDC is locked, message delivered or awaiting delivery                   | `Refunded`, `Claimed` |
+| `Refunded` | Recipient replied. Stake returned to sender (minus protocol fee, if any) | terminal              |
+| `Claimed`  | Deadline passed or spam flagged. Recipient received the stake            | terminal              |
 
 ### Example
 
@@ -110,6 +136,8 @@ Postage fixes the incentives instead of guessing at content. If sending is free 
 - **Open and auditable:** every stake, refund, and claim is an on-chain event.
 
 ## Architecture
+
+> For detailed sequence diagrams, component topologies, and cryptographic flows, see [docs/architecture.md](./docs/architecture.md).
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -141,15 +169,15 @@ Postage fixes the incentives instead of guessing at content. If sending is free 
 
 ### Components
 
-| Component | Responsibility |
-|---|---|
-| **Escrow contract** | Holds USDC, enforces state transitions, emits events |
-| **Backend API** | User accounts, message storage, stake metadata, channel linking |
+| Component            | Responsibility                                                          |
+| -------------------- | ----------------------------------------------------------------------- |
+| **Escrow contract**  | Holds USDC, enforces state transitions, emits events                    |
+| **Backend API**      | User accounts, message storage, stake metadata, channel linking         |
 | **Channel adapters** | Deliver messages and detect replies (Telegram bot, email inbound parse) |
-| **Oracle service** | Holds the oracle key, validates reply evidence, calls `confirm_reply` |
-| **Indexer** | Streams contract events into Postgres for fast reads |
-| **Sweeper (keeper)** | Calls `claim` on expired stakes so recipients get paid automatically |
-| **Frontend** | Recipient setup, sender compose and stake flow, dashboards |
+| **Oracle service**   | Holds the oracle key, validates reply evidence, calls `confirm_reply`   |
+| **Indexer**          | Streams contract events into Postgres for fast reads                    |
+| **Sweeper (keeper)** | Calls `claim` on expired stakes so recipients get paid automatically    |
+| **Frontend**         | Recipient setup, sender compose and stake flow, dashboards              |
 
 ## Smart Contract Specification
 
@@ -203,19 +231,19 @@ pub struct PriceConfig {
 
 ### Public functions
 
-| Function | Caller | Description |
-|---|---|---|
-| `initialize(admin, oracle, treasury, fee_bps, grace_secs)` | Deployer, once | Sets contract roles and parameters |
-| `set_price(recipient, min_amount, min_window, max_window)` | Recipient (`require_auth`) | Sets the minimum stake and allowed reply windows |
-| `send(sender, recipient, token, amount, msg_hash, window_secs) -> u64` | Sender (`require_auth`) | Validates against the recipient's price, pulls USDC into escrow, creates the stake, returns the id |
-| `confirm_reply(stake_id)` | Oracle | Marks the stake `Refunded` and returns funds to the sender (minus fee) |
-| `flag_spam(stake_id)` | Recipient | Marks the stake `Claimed` and pays the recipient immediately |
-| `claim(stake_id)` | Anyone | After `deadline + grace`, pays the recipient if still `Pending` |
-| `get_stake(stake_id) -> Stake` | Anyone | Read-only |
-| `get_price(recipient) -> PriceConfig` | Anyone | Read-only |
-| `set_oracle(new_oracle)` | Admin | Rotates the oracle key |
-| `set_fee(fee_bps)` | Admin | Updates the protocol fee (capped at a hard maximum) |
-| `pause()` / `unpause()` | Admin | Emergency stop for new `send` calls only. Existing stakes can always settle |
+| Function                                                               | Caller                     | Description                                                                                        |
+| ---------------------------------------------------------------------- | -------------------------- | -------------------------------------------------------------------------------------------------- |
+| `initialize(admin, oracle, treasury, fee_bps, grace_secs)`             | Deployer, once             | Sets contract roles and parameters                                                                 |
+| `set_price(recipient, min_amount, min_window, max_window)`             | Recipient (`require_auth`) | Sets the minimum stake and allowed reply windows                                                   |
+| `send(sender, recipient, token, amount, msg_hash, window_secs) -> u64` | Sender (`require_auth`)    | Validates against the recipient's price, pulls USDC into escrow, creates the stake, returns the id |
+| `confirm_reply(stake_id)`                                              | Oracle                     | Marks the stake `Refunded` and returns funds to the sender (minus fee)                             |
+| `flag_spam(stake_id)`                                                  | Recipient                  | Marks the stake `Claimed` and pays the recipient immediately                                       |
+| `claim(stake_id)`                                                      | Anyone                     | After `deadline + grace`, pays the recipient if still `Pending`                                    |
+| `get_stake(stake_id) -> Stake`                                         | Anyone                     | Read-only                                                                                          |
+| `get_price(recipient) -> PriceConfig`                                  | Anyone                     | Read-only                                                                                          |
+| `set_oracle(new_oracle)`                                               | Admin                      | Rotates the oracle key                                                                             |
+| `set_fee(fee_bps)`                                                     | Admin                      | Updates the protocol fee (capped at a hard maximum)                                                |
+| `pause()` / `unpause()`                                                | Admin                      | Emergency stop for new `send` calls only. Existing stakes can always settle                        |
 
 ### Core logic sketch
 
@@ -282,13 +310,13 @@ pub fn confirm_reply(env: Env, stake_id: u64) {
 
 ### Events
 
-| Event | Topics | Data |
-|---|---|---|
-| `sent` | `("sent", stake_id)` | Full `Stake` |
-| `replied` | `("replied", stake_id)` | none |
-| `spam` | `("spam", stake_id)` | none |
-| `claimed` | `("claimed", stake_id)` | none |
-| `price` | `("price", recipient)` | `PriceConfig` |
+| Event     | Topics                  | Data          |
+| --------- | ----------------------- | ------------- |
+| `sent`    | `("sent", stake_id)`    | Full `Stake`  |
+| `replied` | `("replied", stake_id)` | none          |
+| `spam`    | `("spam", stake_id)`    | none          |
+| `claimed` | `("claimed", stake_id)` | none          |
+| `price`   | `("price", recipient)`  | `PriceConfig` |
 
 ### Errors
 
@@ -334,16 +362,18 @@ Terminal-state stakes can be deleted after settlement to reclaim rent. Keep only
 
 ## Reply Detection (the Hard Part)
 
+> For detailed specifications on oracle key custody, KMS integration, evidence schema, and channel account pools, see [docs/oracle.md](./docs/oracle.md).
+
 The contract cannot see Telegram or email, so a trusted **oracle** attests to replies. The design goal is to make that trust narrow, auditable, and eventually replaceable.
 
 ### Why not let the recipient attest?
 
-The recipient earns the stake by *not* replying, so a self-attestation is a conflict of interest. Attestation must come from a party that controls the **delivery channel**, which is the Postage platform.
+The recipient earns the stake by _not_ replying, so a self-attestation is a conflict of interest. Attestation must come from a party that controls the **delivery channel**, which is the Postage platform.
 
 ### Telegram flow (MVP)
 
 1. The recipient links their Telegram account by sending `/start <link-token>` to the bot.
-2. A sender stakes and submits a message. The backend sends it to the recipient through the bot, with a header like *"Message from Bob, staked 5 USDC"* and buttons for **Reply**, **Spam**, and **Mute sender**.
+2. A sender stakes and submits a message. The backend sends it to the recipient through the bot, with a header like _"Message from Bob, staked 5 USDC"_ and buttons for **Reply**, **Spam**, and **Mute sender**.
 3. The bot records the Telegram `message_id` of the delivered message.
 4. When the recipient uses Telegram's reply feature on that message, the update contains `reply_to_message.message_id`. The adapter matches it to the stake.
 5. The adapter applies the **reply validity rules** below. If they pass, it posts a `ReplyEvidence` record to the oracle.
@@ -366,25 +396,28 @@ The recipient earns the stake by *not* replying, so a self-attestation is a conf
 
 A trivial reply should not automatically refund the stake, and an auto-responder must never trigger one. Configurable rules include:
 
-| Rule | Default | Purpose |
-|---|---|---|
-| Minimum length | 1 word | Reject empty or reaction-only replies |
-| Auto-reply filter | On | Ignore vacation or bot responses |
+| Rule                  | Default    | Purpose                                                            |
+| --------------------- | ---------- | ------------------------------------------------------------------ |
+| Minimum length        | 1 word     | Reject empty or reaction-only replies                              |
+| Auto-reply filter     | On         | Ignore vacation or bot responses                                   |
 | Recipient veto window | 10 minutes | Recipient can press **Not a real reply** before the oracle submits |
-| Sender-only replies | On | Reply must come from the recipient's verified identity |
-| One refund per stake | Always | Prevents replay |
+| Sender-only replies   | On         | Reply must come from the recipient's verified identity             |
+| One refund per stake  | Always     | Prevents replay                                                    |
 
 ### Oracle design
 
 **v1: single trusted key.**
+
 - The oracle key lives in a KMS/HSM (AWS KMS, GCP KMS, or a hardware signer), never in the app's environment.
 - The oracle only exposes one capability: `confirm_reply` on this contract. Use a dedicated key with minimal XLM funding.
 - Every attestation is logged with its evidence hash.
 
 **v2: threshold oracle.**
+
 - Multiple independent signers (platform, a second operator, and optionally the sender) must approve. Implement this as a Stellar multisig account or a Soroban custom account contract that implements `__check_auth`.
 
 **v3: cryptographic evidence.**
+
 - DKIM-signed email proofs, or zk-email style proofs, verified on-chain or by a verifier contract, removing trust in the operator for email replies.
 
 ### Sender protections against a dishonest oracle
@@ -397,14 +430,14 @@ A malicious or compromised oracle could withhold refunds. Mitigations:
 
 ## Backend Services
 
-| Service | Language | Notes |
-|---|---|---|
-| `api` | TypeScript (Fastify or NestJS) | REST + WebSocket, session auth, sender and recipient flows |
-| `bot` | TypeScript (Telegraf) | Delivery, button handling, reply detection |
-| `mailer` | TypeScript | Outbound mail and inbound webhook handler |
-| `oracle` | TypeScript or Rust | Evidence verification, transaction building and signing |
-| `indexer` | TypeScript | Polls Soroban RPC `getEvents`, upserts into Postgres, handles reorg-safe cursors |
-| `sweeper` | TypeScript | Cron: finds expired stakes and submits `claim`; bumps TTLs |
+| Service   | Language                       | Notes                                                                            |
+| --------- | ------------------------------ | -------------------------------------------------------------------------------- |
+| `api`     | TypeScript (Fastify or NestJS) | REST + WebSocket, session auth, sender and recipient flows                       |
+| `bot`     | TypeScript (Telegraf)          | Delivery, button handling, reply detection                                       |
+| `mailer`  | TypeScript                     | Outbound mail and inbound webhook handler                                        |
+| `oracle`  | TypeScript or Rust             | Evidence verification, transaction building and signing                          |
+| `indexer` | TypeScript                     | Polls Soroban RPC `getEvents`, upserts into Postgres, handles reorg-safe cursors |
+| `sweeper` | TypeScript                     | Cron: finds expired stakes and submits `claim`; bumps TTLs                       |
 
 ### Transaction submission
 
@@ -480,37 +513,39 @@ CREATE TABLE chain_events (
 
 Base path `/v1`. Authentication uses Sign-In With Stellar (SEP-10 style challenge, signed by the wallet) and returns a session JWT.
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/auth/challenge` | Get a challenge transaction to sign |
-| `POST` | `/auth/verify` | Submit the signed challenge, receive a session |
-| `GET` | `/recipients/:handle` | Public profile: price, windows, accepted channels |
-| `PUT` | `/me/pricing` | Update price and windows (also calls `set_price` on-chain) |
-| `POST` | `/me/channels/telegram/link` | Generate a Telegram deep-link token |
-| `POST` | `/me/channels/email` | Register and verify an email address |
-| `POST` | `/messages` | Create a message draft and receive an unsigned `send` transaction to sign |
-| `POST` | `/messages/:id/submit` | Submit the signed transaction. The message is delivered after on-chain confirmation |
-| `GET` | `/messages/:id` | Message and stake status |
-| `GET` | `/me/inbox` | Recipient inbox |
-| `GET` | `/me/sent` | Sender history |
-| `POST` | `/messages/:id/spam` | Recipient flags spam (triggers `flag_spam`) |
-| `POST` | `/messages/:id/not-a-reply` | Recipient vetoes a reply inside the veto window |
-| `POST` | `/webhooks/telegram` | Telegram updates |
-| `POST` | `/webhooks/inbound-email` | Inbound parse events |
+| Method | Path                         | Description                                                                         |
+| ------ | ---------------------------- | ----------------------------------------------------------------------------------- |
+| `POST` | `/auth/challenge`            | Get a challenge transaction to sign                                                 |
+| `POST` | `/auth/verify`               | Submit the signed challenge, receive a session                                      |
+| `GET`  | `/recipients/:handle`        | Public profile: price, windows, accepted channels                                   |
+| `PUT`  | `/me/pricing`                | Update price and windows (also calls `set_price` on-chain)                          |
+| `POST` | `/me/channels/telegram/link` | Generate a Telegram deep-link token                                                 |
+| `POST` | `/me/channels/email`         | Register and verify an email address                                                |
+| `POST` | `/messages`                  | Create a message draft and receive an unsigned `send` transaction to sign           |
+| `POST` | `/messages/:id/submit`       | Submit the signed transaction. The message is delivered after on-chain confirmation |
+| `GET`  | `/messages/:id`              | Message and stake status                                                            |
+| `GET`  | `/me/inbox`                  | Recipient inbox                                                                     |
+| `GET`  | `/me/sent`                   | Sender history                                                                      |
+| `POST` | `/messages/:id/spam`         | Recipient flags spam (triggers `flag_spam`)                                         |
+| `POST` | `/messages/:id/not-a-reply`  | Recipient vetoes a reply inside the veto window                                     |
+| `POST` | `/webhooks/telegram`         | Telegram updates                                                                    |
+| `POST` | `/webhooks/inbound-email`    | Inbound parse events                                                                |
 
 ## Frontend
 
 Next.js (App Router) with TypeScript and Tailwind.
 
 **Recipient views**
+
 - Onboarding: connect wallet, add a USDC trustline, link Telegram or email, set price.
 - Shareable link, such as `postage.app/@alice`.
 - Inbox with stake amounts, time left, and **Reply / Spam / Allowlist** actions.
 - Earnings dashboard: total claimed, spam caught, reply rate.
 
 **Sender views**
+
 - Compose page showing the price, reply window, and refund rules.
-- Stake confirmation with an explicit statement: *"You get 5 USDC back if Alice replies by 12 Oct. Otherwise she keeps it."*
+- Stake confirmation with an explicit statement: _"You get 5 USDC back if Alice replies by 12 Oct. Otherwise she keeps it."_
 - Stake tracker with live status.
 
 **Wallet support**: Freighter, xBull, Albedo, and others through **Stellar Wallets Kit**. Passkey smart wallets are on the roadmap.
@@ -535,22 +570,24 @@ Wallet friction is the single biggest adoption risk, so the plan addresses it ea
 
 ## Security and Threat Model
 
-| Threat | Mitigation |
-|---|---|
-| Compromised oracle key | KMS/HSM storage, narrow-scope key, rotation via `set_oracle`, move to threshold signing |
-| Malicious oracle withholds refunds | Public signed logs, evidence hashes, dispute path (roadmap), small stakes |
-| Recipient farms stakes | Public reply-rate stats, minimum reply expectations, delisting |
-| Fake or trivial replies refund spam | Validity rules, recipient veto window, minimum length |
-| Auto-responders trigger refunds | Auto-reply header and heuristic filters |
-| Sender cancels after delivery | No cancellation after delivery. At most cancel before delivery is confirmed |
-| Reentrancy and double settlement | State set before external transfers, status checks, tests for invariants |
-| Integer overflow and rounding | Checked math, fee rounding in favor of the sender |
-| TTL expiry locking funds | TTL extension on every touch, public `extend_ttl`, sweeper |
-| Replay of webhooks | Idempotency keys, per-stake single-refund guarantee |
-| Telegram or email spoofing | Verified channel linking, DKIM/SPF/DMARC checks, `reply_to_message` matching |
-| Message content leaks | Encrypt at rest, store only a hash on-chain |
-| Phishing through the platform | Sender identity display, link scanning, recipient block and mute controls |
-| Admin abuse | Admin cannot move user funds, only change fee (capped) and oracle, behind a multisig and timelock |
+> For an exhaustive breakdown of attack vectors, protocol invariants, and threat mitigations, see [docs/threat-model.md](./docs/threat-model.md).
+
+| Threat                              | Mitigation                                                                                        |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Compromised oracle key              | KMS/HSM storage, narrow-scope key, rotation via `set_oracle`, move to threshold signing           |
+| Malicious oracle withholds refunds  | Public signed logs, evidence hashes, dispute path (roadmap), small stakes                         |
+| Recipient farms stakes              | Public reply-rate stats, minimum reply expectations, delisting                                    |
+| Fake or trivial replies refund spam | Validity rules, recipient veto window, minimum length                                             |
+| Auto-responders trigger refunds     | Auto-reply header and heuristic filters                                                           |
+| Sender cancels after delivery       | No cancellation after delivery. At most cancel before delivery is confirmed                       |
+| Reentrancy and double settlement    | State set before external transfers, status checks, tests for invariants                          |
+| Integer overflow and rounding       | Checked math, fee rounding in favor of the sender                                                 |
+| TTL expiry locking funds            | TTL extension on every touch, public `extend_ttl`, sweeper                                        |
+| Replay of webhooks                  | Idempotency keys, per-stake single-refund guarantee                                               |
+| Telegram or email spoofing          | Verified channel linking, DKIM/SPF/DMARC checks, `reply_to_message` matching                      |
+| Message content leaks               | Encrypt at rest, store only a hash on-chain                                                       |
+| Phishing through the platform       | Sender identity display, link scanning, recipient block and mute controls                         |
+| Admin abuse                         | Admin cannot move user funds, only change fee (capped) and oracle, behind a multisig and timelock |
 
 **Before mainnet**: an independent security audit of the contract, a formal review of the oracle key custody, and a public bug bounty.
 
@@ -587,6 +624,8 @@ stellar-postage/
 ├── packages/
 │   ├── sdk/                    # TypeScript client for the contract
 │   └── shared/                 # types, validation, constants
+├── tests/
+│   └── e2e/                    # End-to-end integration test suite
 ├── db/
 │   └── migrations/
 ├── scripts/
@@ -595,7 +634,14 @@ stellar-postage/
 ├── docs/
 │   ├── architecture.md
 │   ├── oracle.md
-│   └── threat-model.md
+│   ├── threat-model.md
+│   ├── testing.md
+│   └── runbooks/               # Operational procedures
+│       ├── rotate-oracle-key.md
+│       ├── indexer-recovery.md
+│       ├── stuck-transactions.md
+│       ├── pause-contract.md
+│       └── oracle-compromise-incident.md
 ├── docker-compose.yml
 ├── .env.example
 ├── LICENSE
@@ -751,6 +797,8 @@ MIN_REPLY_WORDS=1
 
 ## Testing
 
+> For step-by-step instructions on running tests locally and configuring the E2E Docker environment, see [docs/testing.md](./docs/testing.md).
+
 ### Contract
 
 - **Unit tests** with `soroban-sdk`'s `testutils` using `Env::default()` and `env.mock_all_auths()`, including mock auth checks for the negative cases.
@@ -786,11 +834,11 @@ Playwright tests cover the sender and recipient journeys with a mocked wallet.
 
 ## Roadmap
 
-- [ ] **Phase 0: Spec.** Finalize contract interface and threat model.
-- [ ] **Phase 1: Contract.** Escrow contract, full test suite, testnet deployment.
-- [ ] **Phase 2: Telegram MVP.** Bot, oracle, indexer, sweeper, CLI-driven demo.
+- [x] **Phase 0: Spec.** Finalize contract interface and threat model.
+- [x] **Phase 1: Contract.** Escrow contract, full test suite, testnet deployment.
+- [x] **Phase 2: Telegram MVP.** Bot, oracle, indexer, sweeper, CLI-driven demo.
 - [ ] **Phase 3: Web app.** Recipient setup, sender compose and stake flow, wallet kit, fee sponsorship.
-- [ ] **Phase 4: Email.** Proxy addresses, inbound parsing, DKIM-based verification.
+- [x] **Phase 4: Email.** Proxy addresses, inbound parsing, DKIM-based verification.
 - [ ] **Phase 5: Hardening.** Reply validity rules, reputation stats, allowlists, audit, bug bounty.
 - [ ] **Phase 6: Mainnet beta.** Invite-only recipients, low stake caps.
 - [ ] **Later**
