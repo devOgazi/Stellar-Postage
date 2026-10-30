@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { EscrowClient } from '@stellar-postage/sdk';
 import { createPostageBot, TelegramWebhookHandler, type Telegraf } from '@stellar-postage/bot';
+import { PostmarkProvider, EmailReplyDetector, EmailWebhookHandler } from '@stellar-postage/mailer';
 import { type AppConfig, loadConfig } from './config.js';
 import { DataAccessLayer } from './db/dal.js';
 import { getPool } from './db/pool.js';
@@ -30,6 +31,7 @@ declare module 'fastify' {
     escrowClient: EscrowClient;
     bot?: Telegraf;
     webhookHandler?: TelegramWebhookHandler;
+    emailWebhookHandler?: EmailWebhookHandler;
   }
 }
 
@@ -41,6 +43,7 @@ export interface AppOptions {
   escrowClient?: EscrowClient;
   bot?: Telegraf;
   webhookHandler?: TelegramWebhookHandler;
+  emailWebhookHandler?: EmailWebhookHandler;
 }
 
 export function createApp(options?: AppOptions): FastifyInstance {
@@ -56,7 +59,7 @@ export function createApp(options?: AppOptions): FastifyInstance {
       config.authExpirySecs,
       config.sessionSecret,
       nonceStore,
-      dal
+      dal,
     );
   const escrowClient =
     options?.escrowClient ||
@@ -80,6 +83,23 @@ export function createApp(options?: AppOptions): FastifyInstance {
       webhookSecret: config.telegramWebhookSecret,
     });
 
+  const emailProvider = new PostmarkProvider({
+    serverToken: config.mailApiKey,
+  });
+  const emailReplyDetector = new EmailReplyDetector({
+    dal,
+    vetoWindowSecs: config.replyVetoWindowSecs,
+    emailChannelEnabled: config.emailChannelEnabled,
+  });
+  const emailWebhookHandler =
+    options?.emailWebhookHandler ||
+    new EmailWebhookHandler({
+      provider: emailProvider,
+      replyDetector: emailReplyDetector,
+      webhookSecret: config.inboundWebhookSecret,
+      emailChannelEnabled: config.emailChannelEnabled,
+    });
+
   const app = Fastify({
     logger: false,
     ajv: {
@@ -96,6 +116,7 @@ export function createApp(options?: AppOptions): FastifyInstance {
   app.decorate('escrowClient', escrowClient);
   app.decorate('bot', bot);
   app.decorate('webhookHandler', webhookHandler);
+  app.decorate('emailWebhookHandler', emailWebhookHandler);
 
   // Authentication preHandler hook
   app.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
@@ -144,9 +165,9 @@ export function createApp(options?: AppOptions): FastifyInstance {
         usdcSacId: config.usdcSacId,
         replyVetoWindowSecs: config.replyVetoWindowSecs,
       });
-      await v1.register(webhookRoutes, { webhookHandler });
+      await v1.register(webhookRoutes, { webhookHandler, emailWebhookHandler });
     },
-    { prefix: '/v1' }
+    { prefix: '/v1' },
   );
 
   return app;

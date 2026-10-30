@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@stellar-postage/bot": "workspace:*",
+    "@stellar-postage/mailer": "workspace:*",
     "@stellar-postage/sdk": "workspace:*",
     "@stellar-postage/shared": "workspace:*",
     "@stellar/stellar-sdk": "12.3.0",

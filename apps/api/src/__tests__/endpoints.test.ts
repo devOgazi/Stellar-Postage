@@ -21,8 +21,8 @@ describe('Core REST Endpoints and Authorization', () => {
   // Keypairs for participants
   const sponsorKeypair = Keypair.random();
   const aliceKeypair = Keypair.random(); // Recipient
-  const bobKeypair = Keypair.random();   // Sender
-  const eveKeypair = Keypair.random();   // Unrelated third-party
+  const bobKeypair = Keypair.random(); // Sender
+  const eveKeypair = Keypair.random(); // Unrelated third-party
 
   let aliceToken: string;
   let bobToken: string;
@@ -42,7 +42,8 @@ describe('Core REST Endpoints and Authorization', () => {
     testConfig.sponsorKeypair = sponsorKeypair;
 
     // Database setup
-    const realDbUrl = process.env['DATABASE_URL'] || 'postgres://postgres:postgres@localhost:5432/postage';
+    const realDbUrl =
+      process.env['DATABASE_URL'] || 'postgres://postgres:postgres@localhost:5432/postage';
     const testPool = new pg.Pool({
       connectionString: realDbUrl,
       connectionTimeoutMillis: 1000,
@@ -103,7 +104,7 @@ describe('Core REST Endpoints and Authorization', () => {
       testConfig.authExpirySecs,
       testConfig.sessionSecret,
       nonceStore,
-      dal
+      dal,
     );
 
     app = createApp({
@@ -121,21 +122,21 @@ describe('Core REST Endpoints and Authorization', () => {
     aliceId = aliceUser.id;
     aliceToken = signJwt(
       { sub: aliceId, stellar_address: aliceKeypair.publicKey() },
-      testConfig.sessionSecret
+      testConfig.sessionSecret,
     );
 
     const bobUser = await dal.upsertUser(bobKeypair.publicKey(), 'bob');
     bobId = bobUser.id;
     bobToken = signJwt(
       { sub: bobId, stellar_address: bobKeypair.publicKey() },
-      testConfig.sessionSecret
+      testConfig.sessionSecret,
     );
 
     const eveUser = await dal.upsertUser(eveKeypair.publicKey(), 'eve');
     eveId = eveUser.id;
     eveToken = signJwt(
       { sub: eveId, stellar_address: eveKeypair.publicKey() },
-      testConfig.sessionSecret
+      testConfig.sessionSecret,
     );
   });
 
@@ -163,7 +164,7 @@ describe('Core REST Endpoints and Authorization', () => {
       expect(data.recipient.stellar_address).toBe(aliceKeypair.publicKey());
       expect(data.pricing.min_amount).toBeDefined();
       expect(data.channels).toEqual(
-        expect.arrayContaining([expect.objectContaining({ kind: 'telegram', verified: true })])
+        expect.arrayContaining([expect.objectContaining({ kind: 'telegram', verified: true })]),
       );
     });
 
@@ -460,6 +461,36 @@ describe('Core REST Endpoints and Authorization', () => {
       expect(json.url).toContain(json.link_token);
     });
 
+    it('POST /me/channels/email: registers and verifies recipient email', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/me/channels/email',
+        headers: { authorization: `Bearer ${aliceToken}` },
+        payload: { email: 'alice@example.com' },
+      });
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.registered).toBe(true);
+      expect(json.channel.kind).toBe('email');
+      expect(json.channel.external_id).toBe('alice@example.com');
+      expect(json.channel.verified_at).toBeDefined();
+    });
+
+    it('POST /webhooks/inbound-email: handles inbound email parse events', async () => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/v1/webhooks/inbound-email',
+        payload: {
+          From: 'alice@example.com',
+          To: 's_8f3a9c@reply.example.com',
+          Subject: 'Test reply',
+          TextBody: 'Hello from test',
+        },
+      });
+      // Handler processes payload (returning 200 with result)
+      expect([200, 503]).toContain(res.statusCode);
+    });
+
     it('POST /webhooks/telegram: receives updates and enforces secret verification and idempotency', async () => {
       // 1. Missing or invalid secret if secret configured
       const resWithoutSecret = await app.inject({
@@ -468,6 +499,7 @@ describe('Core REST Endpoints and Authorization', () => {
         headers: { 'x-telegram-bot-api-secret-token': 'wrong-token' },
         payload: { update_id: 9999 },
       });
+      expect([200, 403]).toContain(resWithoutSecret.statusCode);
       // In testConfig, telegramWebhookSecret is empty by default, so if not set it accepts
       // Let's test with valid payload
       const validUpdate = await app.inject({

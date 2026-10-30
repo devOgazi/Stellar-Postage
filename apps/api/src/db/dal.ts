@@ -25,7 +25,7 @@ export class DataAccessLayer {
   async findUserById(id: string): Promise<UserRow | null> {
     const res = await this.db.query<UserRow>(
       'SELECT id, stellar_address, handle, created_at FROM users WHERE id = $1',
-      [id]
+      [id],
     );
     return res.rows[0] ?? null;
   }
@@ -33,7 +33,7 @@ export class DataAccessLayer {
   async findUserByAddress(stellarAddress: string): Promise<UserRow | null> {
     const res = await this.db.query<UserRow>(
       'SELECT id, stellar_address, handle, created_at FROM users WHERE stellar_address = $1',
-      [stellarAddress]
+      [stellarAddress],
     );
     return res.rows[0] ?? null;
   }
@@ -41,22 +41,19 @@ export class DataAccessLayer {
   async findUserByHandle(handle: string): Promise<UserRow | null> {
     const res = await this.db.query<UserRow>(
       'SELECT id, stellar_address, handle, created_at FROM users WHERE handle = $1',
-      [handle]
+      [handle],
     );
     return res.rows[0] ?? null;
   }
 
-  async upsertUser(
-    stellarAddress: string,
-    handle?: string | null
-  ): Promise<UserRow> {
+  async upsertUser(stellarAddress: string, handle?: string | null): Promise<UserRow> {
     const res = await this.db.query<UserRow>(
       `INSERT INTO users (stellar_address, handle)
        VALUES ($1, $2)
        ON CONFLICT (stellar_address) DO UPDATE
        SET handle = COALESCE(EXCLUDED.handle, users.handle)
        RETURNING id, stellar_address, handle, created_at`,
-      [stellarAddress, handle ?? null]
+      [stellarAddress, handle ?? null],
     );
     const user = res.rows[0];
     if (!user) throw new Error('Failed to upsert user');
@@ -66,7 +63,7 @@ export class DataAccessLayer {
   async updateUserHandle(id: string, handle: string): Promise<UserRow> {
     const res = await this.db.query<UserRow>(
       'UPDATE users SET handle = $1 WHERE id = $2 RETURNING id, stellar_address, handle, created_at',
-      [handle, id]
+      [handle, id],
     );
     const user = res.rows[0];
     if (!user) throw new Error(`User not found: ${id}`);
@@ -80,18 +77,18 @@ export class DataAccessLayer {
   async findChannelById(id: string): Promise<ChannelRow | null> {
     const res = await this.db.query<ChannelRow>(
       'SELECT id, user_id, kind, external_id, verified_at FROM channels WHERE id = $1',
-      [id]
+      [id],
     );
     return res.rows[0] ?? null;
   }
 
   async findChannelByKindAndExternalId(
     kind: 'telegram' | 'email',
-    externalId: string
+    externalId: string,
   ): Promise<ChannelRow | null> {
     const res = await this.db.query<ChannelRow>(
       'SELECT id, user_id, kind, external_id, verified_at FROM channels WHERE kind = $1 AND external_id = $2',
-      [kind, externalId]
+      [kind, externalId],
     );
     return res.rows[0] ?? null;
   }
@@ -99,7 +96,7 @@ export class DataAccessLayer {
   async findChannelsByUserId(userId: string): Promise<ChannelRow[]> {
     const res = await this.db.query<ChannelRow>(
       'SELECT id, user_id, kind, external_id, verified_at FROM channels WHERE user_id = $1 ORDER BY verified_at DESC NULLS LAST',
-      [userId]
+      [userId],
     );
     return res.rows;
   }
@@ -108,13 +105,13 @@ export class DataAccessLayer {
     userId: string,
     kind: 'telegram' | 'email',
     externalId: string,
-    verifiedAt?: Date | null
+    verifiedAt?: Date | null,
   ): Promise<ChannelRow> {
     const res = await this.db.query<ChannelRow>(
       `INSERT INTO channels (user_id, kind, external_id, verified_at)
        VALUES ($1, $2, $3, $4)
        RETURNING id, user_id, kind, external_id, verified_at`,
-      [userId, kind, externalId, verifiedAt ?? null]
+      [userId, kind, externalId, verifiedAt ?? null],
     );
     const channel = res.rows[0];
     if (!channel) throw new Error('Failed to create channel');
@@ -124,7 +121,7 @@ export class DataAccessLayer {
   async verifyChannel(id: string): Promise<ChannelRow> {
     const res = await this.db.query<ChannelRow>(
       'UPDATE channels SET verified_at = now() WHERE id = $1 RETURNING id, user_id, kind, external_id, verified_at',
-      [id]
+      [id],
     );
     const channel = res.rows[0];
     if (!channel) throw new Error(`Channel not found: ${id}`);
@@ -139,10 +136,25 @@ export class DataAccessLayer {
        SET user_id = EXCLUDED.user_id,
            verified_at = now()
        RETURNING id, user_id, kind, external_id, verified_at`,
-      [userId, externalId]
+      [userId, externalId],
     );
     const channel = res.rows[0];
     if (!channel) throw new Error('Failed to link telegram channel');
+    return channel;
+  }
+
+  async linkEmailChannel(userId: string, externalId: string): Promise<ChannelRow> {
+    const res = await this.db.query<ChannelRow>(
+      `INSERT INTO channels (user_id, kind, external_id, verified_at)
+       VALUES ($1, 'email', $2, now())
+       ON CONFLICT (kind, external_id) DO UPDATE
+       SET user_id = EXCLUDED.user_id,
+           verified_at = now()
+       RETURNING id, user_id, kind, external_id, verified_at`,
+      [userId, externalId.toLowerCase().trim()],
+    );
+    const channel = res.rows[0];
+    if (!channel) throw new Error('Failed to link email channel');
     return channel;
   }
 
@@ -153,7 +165,7 @@ export class DataAccessLayer {
   async findPricingByUserId(userId: string): Promise<PricingRow | null> {
     const res = await this.db.query<PricingRow>(
       'SELECT user_id, min_amount, min_window_secs, max_window_secs, allowlist FROM pricing WHERE user_id = $1',
-      [userId]
+      [userId],
     );
     return res.rows[0] ?? null;
   }
@@ -163,7 +175,7 @@ export class DataAccessLayer {
     minAmount: string | number | bigint,
     minWindowSecs: number,
     maxWindowSecs: number,
-    allowlist?: unknown[]
+    allowlist?: unknown[],
   ): Promise<PricingRow> {
     const allowlistJson = JSON.stringify(allowlist ?? []);
     const res = await this.db.query<PricingRow>(
@@ -175,7 +187,7 @@ export class DataAccessLayer {
            max_window_secs = EXCLUDED.max_window_secs,
            allowlist = EXCLUDED.allowlist
        RETURNING user_id, min_amount, min_window_secs, max_window_secs, allowlist`,
-      [userId, minAmount.toString(), minWindowSecs, maxWindowSecs, allowlistJson]
+      [userId, minAmount.toString(), minWindowSecs, maxWindowSecs, allowlistJson],
     );
     const pricing = res.rows[0];
     if (!pricing) throw new Error('Failed to upsert pricing');
@@ -207,7 +219,7 @@ export class DataAccessLayer {
         params.msg_hash,
         params.proxy_addr ?? null,
         params.status ?? 'pending',
-      ]
+      ],
     );
     const msg = res.rows[0];
     if (!msg) throw new Error('Failed to create message');
@@ -217,7 +229,7 @@ export class DataAccessLayer {
   async findMessageById(id: string): Promise<MessageRow | null> {
     const res = await this.db.query<MessageRow>(
       'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE id = $1',
-      [id]
+      [id],
     );
     return res.rows[0] ?? null;
   }
@@ -225,7 +237,7 @@ export class DataAccessLayer {
   async findMessageByStakeId(stakeId: bigint | number | string): Promise<MessageRow | null> {
     const res = await this.db.query<MessageRow>(
       'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE stake_id = $1',
-      [stakeId.toString()]
+      [stakeId.toString()],
     );
     return res.rows[0] ?? null;
   }
@@ -233,7 +245,7 @@ export class DataAccessLayer {
   async updateMessageStatus(id: string, status: string): Promise<MessageRow> {
     const res = await this.db.query<MessageRow>(
       'UPDATE messages SET status = $1 WHERE id = $2 RETURNING id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at',
-      [status, id]
+      [status, id],
     );
     const msg = res.rows[0];
     if (!msg) throw new Error(`Message not found: ${id}`);
@@ -243,7 +255,7 @@ export class DataAccessLayer {
   async attachStakeId(id: string, stakeId: bigint | number | string): Promise<MessageRow> {
     const res = await this.db.query<MessageRow>(
       'UPDATE messages SET stake_id = $1 WHERE id = $2 RETURNING id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at',
-      [stakeId.toString(), id]
+      [stakeId.toString(), id],
     );
     const msg = res.rows[0];
     if (!msg) throw new Error(`Message not found: ${id}`);
@@ -253,7 +265,7 @@ export class DataAccessLayer {
   async updateMessageExternalRef(id: string, externalRef: string): Promise<MessageRow> {
     const res = await this.db.query<MessageRow>(
       'UPDATE messages SET external_ref = $1 WHERE id = $2 RETURNING id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at',
-      [externalRef, id]
+      [externalRef, id],
     );
     const msg = res.rows[0];
     if (!msg) throw new Error(`Message not found: ${id}`);
@@ -263,15 +275,33 @@ export class DataAccessLayer {
   async findMessageByExternalRef(externalRef: string): Promise<MessageRow | null> {
     const res = await this.db.query<MessageRow>(
       'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE external_ref = $1',
-      [externalRef]
+      [externalRef],
     );
     return res.rows[0] ?? null;
+  }
+
+  async findMessageByProxyAddr(proxyAddr: string): Promise<MessageRow | null> {
+    const res = await this.db.query<MessageRow>(
+      'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE proxy_addr = $1',
+      [proxyAddr.toLowerCase().trim()],
+    );
+    return res.rows[0] ?? null;
+  }
+
+  async updateMessageProxyAddr(id: string, proxyAddr: string): Promise<MessageRow> {
+    const res = await this.db.query<MessageRow>(
+      'UPDATE messages SET proxy_addr = $1 WHERE id = $2 RETURNING id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at',
+      [proxyAddr.toLowerCase().trim(), id],
+    );
+    const msg = res.rows[0];
+    if (!msg) throw new Error(`Message not found: ${id}`);
+    return msg;
   }
 
   async findInbox(recipientId: string): Promise<MessageRow[]> {
     const res = await this.db.query<MessageRow>(
       'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE recipient_id = $1 ORDER BY created_at DESC',
-      [recipientId]
+      [recipientId],
     );
     return res.rows;
   }
@@ -279,14 +309,14 @@ export class DataAccessLayer {
   async findSent(senderAddr: string): Promise<MessageRow[]> {
     const res = await this.db.query<MessageRow>(
       'SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE sender_addr = $1 ORDER BY created_at DESC',
-      [senderAddr]
+      [senderAddr],
     );
     return res.rows;
   }
 
   async findPendingStakeMessages(): Promise<MessageRow[]> {
     const res = await this.db.query<MessageRow>(
-      "SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE status IN ('pending', 'delivered') AND stake_id IS NOT NULL"
+      "SELECT id, stake_id, sender_addr, recipient_id, channel_id, body_enc, msg_hash, external_ref, proxy_addr, status, created_at FROM messages WHERE status IN ('pending', 'delivered') AND stake_id IS NOT NULL",
     );
     return res.rows;
   }
@@ -312,7 +342,7 @@ export class DataAccessLayer {
         JSON.stringify(params.payload),
         params.hash,
         params.oracle_tx ?? null,
-      ]
+      ],
     );
     const evidence = res.rows[0];
     if (!evidence) throw new Error('Failed to create reply evidence');
@@ -322,7 +352,7 @@ export class DataAccessLayer {
   async findReplyEvidenceByMessageId(messageId: string): Promise<ReplyEvidenceRow[]> {
     const res = await this.db.query<ReplyEvidenceRow>(
       'SELECT id, message_id, kind, payload, hash, oracle_tx, created_at FROM reply_evidence WHERE message_id = $1 ORDER BY created_at ASC',
-      [messageId]
+      [messageId],
     );
     return res.rows;
   }
@@ -330,7 +360,7 @@ export class DataAccessLayer {
   async findReplyEvidenceById(id: string): Promise<ReplyEvidenceRow | null> {
     const res = await this.db.query<ReplyEvidenceRow>(
       'SELECT id, message_id, kind, payload, hash, oracle_tx, created_at FROM reply_evidence WHERE id = $1',
-      [id]
+      [id],
     );
     return res.rows[0] ?? null;
   }
@@ -338,7 +368,7 @@ export class DataAccessLayer {
   async updateReplyEvidenceOracleTx(id: string, oracleTx: string): Promise<ReplyEvidenceRow> {
     const res = await this.db.query<ReplyEvidenceRow>(
       'UPDATE reply_evidence SET oracle_tx = $1 WHERE id = $2 RETURNING id, message_id, kind, payload, hash, oracle_tx, created_at',
-      [oracleTx, id]
+      [oracleTx, id],
     );
     const row = res.rows[0];
     if (!row) throw new Error(`ReplyEvidence not found: ${id}`);
@@ -368,14 +398,14 @@ export class DataAccessLayer {
         params.topic,
         params.stake_id ? params.stake_id.toString() : null,
         JSON.stringify(params.payload ?? null),
-      ]
+      ],
     );
   }
 
   async findChainEventsByStakeId(stakeId: bigint | number | string): Promise<ChainEventRow[]> {
     const res = await this.db.query<ChainEventRow>(
       'SELECT ledger, tx_hash, event_idx, topic, stake_id, payload FROM chain_events WHERE stake_id = $1 ORDER BY ledger ASC, event_idx ASC',
-      [stakeId.toString()]
+      [stakeId.toString()],
     );
     return res.rows;
   }

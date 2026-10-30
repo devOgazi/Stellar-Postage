@@ -18,6 +18,11 @@ export interface AppConfig {
   messageEncryptionKey: Buffer;
   telegramBotToken: string;
   telegramWebhookSecret: string;
+  emailChannelEnabled: boolean;
+  mailProvider: string;
+  mailApiKey: string;
+  inboundDomain: string;
+  inboundWebhookSecret: string;
 }
 
 export function loadConfig(overrides?: Partial<AppConfig>): AppConfig {
@@ -64,17 +69,23 @@ export function loadConfig(overrides?: Partial<AppConfig>): AppConfig {
       process.env['ESCROW_CONTRACT_ID'] ||
       'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
     usdcSacId:
-      process.env['USDC_SAC_ID'] ||
-      'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
+      process.env['USDC_SAC_ID'] || 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
     sponsorKeypair,
-    databaseUrl: process.env['DATABASE_URL'] || 'postgres://postgres:postgres@localhost:5432/postage',
-    sessionSecret: process.env['SESSION_SECRET'] || 'development-session-secret-at-least-32-chars-long',
+    databaseUrl:
+      process.env['DATABASE_URL'] || 'postgres://postgres:postgres@localhost:5432/postage',
+    sessionSecret:
+      process.env['SESSION_SECRET'] || 'development-session-secret-at-least-32-chars-long',
     domain: process.env['AUTH_DOMAIN'] || 'postage.stellar',
     authExpirySecs: parseInt(process.env['AUTH_EXPIRY_SECS'] || '300', 10),
     replyVetoWindowSecs: parseInt(process.env['REPLY_VETO_WINDOW_SECS'] || '600', 10),
     messageEncryptionKey: messageKey,
     telegramBotToken: process.env['TELEGRAM_BOT_TOKEN'] || '',
     telegramWebhookSecret: process.env['TELEGRAM_WEBHOOK_SECRET'] || '',
+    emailChannelEnabled: process.env['EMAIL_CHANNEL_ENABLED'] === 'true',
+    mailProvider: process.env['MAIL_PROVIDER'] || 'postmark',
+    mailApiKey: process.env['MAIL_API_KEY'] || '',
+    inboundDomain: process.env['INBOUND_DOMAIN'] || 'reply.example.com',
+    inboundWebhookSecret: process.env['INBOUND_WEBHOOK_SECRET'] || '',
   };
 
   return { ...baseConfig, ...overrides };

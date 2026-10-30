@@ -63,7 +63,7 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
         minAmount,
         body.min_window_secs,
         body.max_window_secs,
-        allowlist
+        allowlist,
       );
 
       // Build the on-chain set_price transaction via SDK
@@ -79,7 +79,7 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
       } catch (err: unknown) {
         // If simulation is not available in mock/offline mode, transactionXdr remains null
         fastify.log.warn(
-          `setPrice simulation skipped: ${err instanceof Error ? err.message : String(err)}`
+          `setPrice simulation skipped: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
 
@@ -92,7 +92,7 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
         },
         transaction: transactionXdr,
       });
-    }
+    },
   );
 
   // POST /me/channels/telegram/link
@@ -111,7 +111,46 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
         link_token: token,
         url: `https://t.me/${username}?start=${token}`,
       });
-    }
+    },
+  );
+
+  // POST /me/channels/email
+  fastify.post(
+    '/me/channels/email',
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', minLength: 3 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const user = request.user!;
+      const { email } = request.body as { email: string };
+
+      if (!email.includes('@')) {
+        return reply.code(400).send({
+          error: 'Bad Request',
+          message: 'Invalid email address format',
+        });
+      }
+
+      const channel = await dal.linkEmailChannel(user.id, email);
+      return reply.code(200).send({
+        channel: {
+          id: channel.id,
+          kind: channel.kind,
+          external_id: channel.external_id,
+          verified_at: channel.verified_at,
+        },
+        registered: true,
+      });
+    },
   );
 
   // GET /me/inbox
@@ -135,7 +174,7 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
       }));
 
       return reply.code(200).send(items);
-    }
+    },
   );
 
   // GET /me/sent
@@ -159,7 +198,7 @@ export const meRoutes: FastifyPluginCallback<MeRoutesOptions> = (fastify, option
       }));
 
       return reply.code(200).send(items);
-    }
+    },
   );
 
   done();
