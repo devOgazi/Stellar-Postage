@@ -49,7 +49,7 @@ export class TransactionSubmitter {
     stakeId: bigint | number,
     retryDelayFn?: (ms: number) => Promise<void>
   ): Promise<{ txHash: string; ledger?: number }> {
-    const sleep = retryDelayFn || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+    const sleep = retryDelayFn || ((ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms)));
 
     let lastError: unknown;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
@@ -63,9 +63,10 @@ export class TransactionSubmitter {
 
           // 3. Submit and wait for confirmation
           const result = await this.escrowClient.submitAndWait(signedTx);
+          const txRes = result as { hash?: string };
           return {
-            txHash: (result as any).hash || signedTx.hash().toString('hex'),
-            ledger: (result as any).latestLedger,
+            txHash: txRes.hash || signedTx.hash().toString('hex'),
+            ledger: result.latestLedger,
           };
         });
       } catch (err: unknown) {
