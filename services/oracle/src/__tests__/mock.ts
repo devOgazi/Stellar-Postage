@@ -9,14 +9,14 @@ export function mockFn<T extends (...args: any[]) => any>(initialImpl?: T) {
 
   fn.calls = calls;
   fn.mockResolvedValue = (val: any) => {
-    currentImpl = (async () => val) as any;
+    currentImpl = (() => Promise.resolve(val)) as any;
     return fn;
   };
   fn.mockResolvedValueOnce = (val: any) => {
     const prevImpl = currentImpl;
-    currentImpl = (async () => {
+    currentImpl = (() => {
       currentImpl = prevImpl;
-      return val;
+      return Promise.resolve(val);
     }) as any;
     return fn;
   };

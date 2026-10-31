@@ -1,4 +1,3 @@
-/// <reference path="../../../../node_modules/.pnpm/@types+jest@29.5.12/node_modules/@types/jest/index.d.ts" />
 import crypto from 'node:crypto';
 import { Keypair } from '@stellar/stellar-sdk';
 import { LocalSigner, KmsSignerStub } from '../signer.js';
@@ -25,7 +24,7 @@ describe('Oracle Service v1', () => {
     ]);
 
     mockEscrowClient = {
-      fetchStake: mockFn(async () => ({
+      fetchStake: mockFn(() => ({
         id: 100n,
         sender: 'GBOB_SENDER',
         recipient: 'GALICE_RECIPIENT',
@@ -36,23 +35,23 @@ describe('Oracle Service v1', () => {
         deadline: 2000n,
         status: 'Pending',
       })),
-      confirmReply: mockFn(async (stakeId: any, caller: any) => {
+      confirmReply: mockFn((_stakeId: any, _caller: any) => {
         return {
           hash: () => Buffer.from('mock-tx-hash-bytes-32-chars-long'),
           sign: mockFn(),
           toXDR: () => 'mock-xdr',
         };
       }),
-      submitAndWait: mockFn(async () => ({
+      submitAndWait: mockFn(() => ({
         hash: 'tx_confirmed_hash_123456',
         latestLedger: 54321,
       })),
     };
 
     mockDal = {
-      findReplyEvidenceById: mockFn(async () => null),
-      updateReplyEvidenceOracleTx: mockFn(async () => ({})),
-      findMessageById: mockFn(async () => ({ id: 'msg-1', stake_id: '100' })),
+      findReplyEvidenceById: mockFn(() => null),
+      updateReplyEvidenceOracleTx: mockFn(() => ({})),
+      findMessageById: mockFn(() => ({ id: 'msg-1', stake_id: '100' })),
     };
   });
 
@@ -183,7 +182,7 @@ describe('Oracle Service v1', () => {
     const delays: number[] = [];
 
     // Fails on attempt 0 with txBAD_SEQ, attempt 1 with resource limit, succeeds on attempt 2
-    mockEscrowClient.submitAndWait.mockImplementation(async () => {
+    mockEscrowClient.submitAndWait.mockImplementation(() => {
       attempts++;
       if (attempts === 1) {
         throw new Error('Transaction submission failed: txBAD_SEQ');
@@ -191,7 +190,7 @@ describe('Oracle Service v1', () => {
       if (attempts === 2) {
         throw new Error('Simulation failed: resource limit exceeded');
       }
-      return { hash: 'tx_eventual_success_hash' };
+      return Promise.resolve({ hash: 'tx_eventual_success_hash' });
     });
 
     const submitter = new TransactionSubmitter(mockEscrowClient, localSigner, channelPool, {
@@ -200,8 +199,9 @@ describe('Oracle Service v1', () => {
       backoffFactor: 2,
     });
 
-    const customSleep = async (ms: number) => {
+    const customSleep = (ms: number) => {
       delays.push(ms);
+      return Promise.resolve();
     };
 
     const res = await submitter.submitConfirmReply(100n, customSleep);
@@ -212,7 +212,7 @@ describe('Oracle Service v1', () => {
   });
 
   it('retry behavior: throws after max retries exceeded', async () => {
-    mockEscrowClient.submitAndWait.mockImplementation(async () => {
+    mockEscrowClient.submitAndWait.mockImplementation(() => {
       throw new Error('txBAD_SEQ sequence error');
     });
 
@@ -222,7 +222,7 @@ describe('Oracle Service v1', () => {
       backoffFactor: 2,
     });
 
-    await expect(submitter.submitConfirmReply(100n, async () => {})).rejects.toThrow(
+    await expect(submitter.submitConfirmReply(100n, () => Promise.resolve())).rejects.toThrow(
       /txBAD_SEQ/
     );
   });

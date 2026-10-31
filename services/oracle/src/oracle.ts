@@ -20,10 +20,20 @@ export interface OracleConfig {
   initialBackoffMs?: number | undefined;
 }
 
+export interface ReplyEvidenceRecord {
+  id: string;
+  oracle_tx?: string | null;
+}
+
+export interface MessageRecord {
+  id: string;
+  stake_id?: string | null;
+}
+
 export interface OracleDataAccess {
-  findReplyEvidenceById?(id: string): Promise<any>;
-  updateReplyEvidenceOracleTx(id: string, oracleTx: string): Promise<any>;
-  findMessageById?(id: string): Promise<any>;
+  findReplyEvidenceById?(id: string): Promise<ReplyEvidenceRecord | null>;
+  updateReplyEvidenceOracleTx(id: string, oracleTx: string): Promise<unknown>;
+  findMessageById?(id: string): Promise<MessageRecord | null>;
 }
 
 export interface AttestationResult {

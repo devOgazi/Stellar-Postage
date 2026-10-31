@@ -20,7 +20,7 @@ if (process.argv[1]?.endsWith('services/oracle/src/index.ts')) {
   } else {
     console.log('Initializing Oracle service...');
     const signer = new LocalSigner(oracleSecret);
-    signer.getPublicKey().then((pk) => {
+    void signer.getPublicKey().then((pk) => {
       console.log(`Oracle active with public key: ${pk}`);
       const escrowClient = new EscrowClient({
         contractId: process.env['ESCROW_CONTRACT_ID'] || 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
@@ -28,7 +28,8 @@ if (process.argv[1]?.endsWith('services/oracle/src/index.ts')) {
         networkPassphrase: process.env['NETWORK_PASSPHRASE'] || 'Test SDF Network ; September 2015',
       });
       const channelPool = new ChannelAccountPool([pk]);
-      const oracle = new OracleService(escrowClient, signer, channelPool);
+      // Construct the service so it is initialized and ready.
+      new OracleService(escrowClient, signer, channelPool);
       console.log('Oracle service ready to verify reply evidence.');
     });
   }

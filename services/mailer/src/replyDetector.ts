@@ -50,8 +50,8 @@ export class EmailReplyDetector {
 
   constructor(options: EmailReplyDetectorOptions) {
     this.dal = options.dal;
-    this.minReplyWords = options.minReplyWords ?? DEFAULT_MIN_REPLY_WORDS;
-    this.vetoWindowSecs = options.vetoWindowSecs ?? DEFAULT_REPLY_VETO_WINDOW_SECS;
+    this.minReplyWords = options.minReplyWords ?? (DEFAULT_MIN_REPLY_WORDS as number);
+    this.vetoWindowSecs = options.vetoWindowSecs ?? (DEFAULT_REPLY_VETO_WINDOW_SECS as number);
     this.emailChannelEnabled = options.emailChannelEnabled ?? true;
     this.onForwardToOracle = options.onForwardToOracle;
     this.onRelayToSender = options.onRelayToSender;

@@ -11,7 +11,7 @@
     "dev": "pnpm --parallel -r run dev",
     "build": "pnpm --filter './packages/**' build && pnpm --filter './apps/**' --filter './services/**' build",
     "lint": "pnpm -r run lint",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm --filter './packages/**' build && pnpm -r run typecheck",
     "test": "pnpm -r run test",
     "test:integration": "pnpm -r run test:integration",
     "db:migrate": "pnpm --filter @stellar-postage/api run db:migrate",

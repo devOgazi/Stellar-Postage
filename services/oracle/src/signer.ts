@@ -27,13 +27,13 @@ export class LocalSigner implements Signer {
     this.keypair = Keypair.fromSecret(secret);
   }
 
-  async getPublicKey(): Promise<string> {
-    return this.keypair.publicKey();
+  getPublicKey(): Promise<string> {
+    return Promise.resolve(this.keypair.publicKey());
   }
 
-  async signTransaction(tx: Transaction): Promise<Transaction> {
+  signTransaction(tx: Transaction): Promise<Transaction> {
     tx.sign(this.keypair);
-    return tx;
+    return Promise.resolve(tx);
   }
 }
 
@@ -66,11 +66,11 @@ export class KmsSignerStub implements Signer {
       mockPublicKey || 'GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF';
   }
 
-  async getPublicKey(): Promise<string> {
-    return this.mockPublicKey;
+  getPublicKey(): Promise<string> {
+    return Promise.resolve(this.mockPublicKey);
   }
 
-  async signTransaction(tx: Transaction): Promise<Transaction> {
+  signTransaction(tx: Transaction): Promise<Transaction> {
     // When live KMS is configured, invoke AWS/GCP KMS API here.
     // Stub appends a dummy signature hint for demonstration.
     const hint = Buffer.from(this.mockPublicKey.slice(-4), 'utf8');
@@ -80,6 +80,6 @@ export class KmsSignerStub implements Signer {
       signature: dummySignature,
     });
     tx.signatures.push(decoratedSig);
-    return tx;
+    return Promise.resolve(tx);
   }
 }
